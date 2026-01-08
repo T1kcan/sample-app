@@ -1,0 +1,43 @@
+name: CI - Build & GitOps Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  IMAGE_NAME: harbor.aisapi.com.tr/test/sample-app
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set image tag
+        run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Docker login to Harbor
+        run: |
+          echo "${{ secrets.HARBOR_PASS }}" | docker login \
+            ${{ secrets.HARBOR_URL }} \
+            -u ${{ secrets.HARBOR_USER }} \
+            --password-stdin
+
+      - name: Build & push image
+        run: |
+          docker build -t $IMAGE_NAME:$IMAGE_TAG .
+          docker push $IMAGE_NAME:$IMAGE_TAG
+
+      - name: Update GitOps repo (staging)
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+        run: |
+          git clone https://$GH_TOKEN@github.com/${{ secrets.GITOPS_REPO }}.git
+          cd sample-app-gitops
+          sed -i "s/tag:.*/tag: $IMAGE_TAG/" environments/staging/values.yaml
+          git config user.name "github-actions"
+          git config user.email "ci@company.com"
+          git commit -am "deploy(staging): sample-app $IMAGE_TAG"
+          git push
