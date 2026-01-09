@@ -18,6 +18,16 @@ jobs:
       - name: Set image tag
         run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
+      - name: Install Harbor CA Certificate
+        run: |
+          echo "${{ secrets.HARBOR_CA_CERT }}" | sudo tee /usr/local/share/ca-certificates/harbor-ca.crt
+          sudo update-ca-certificates
+          sudo mkdir -p /etc/docker/certs.d/${{ secrets.HARBOR_URL }}
+          echo "${{ secrets.HARBOR_CA_CERT }}" | sudo tee /etc/docker/certs.d/${{ secrets.HARBOR_URL }}/ca.crt
+          
+          # Bazı durumlarda docker daemon'ı restart etmek gerekebilir (Genelde runner'da gerekmez)
+          # sudo systemctl restart docker
+
       - name: Docker login to Harbor
         run: |
           echo "${{ secrets.HARBOR_PASS }}" | docker login \
